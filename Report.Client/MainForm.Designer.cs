@@ -60,11 +60,11 @@
             // 
             // notifyIcon
             // 
-            this.notifyIcon.BalloonTipText = "Report Client";
-            this.notifyIcon.BalloonTipTitle = "Report Client";
+            this.notifyIcon.BalloonTipText = "报告客户端";
+            this.notifyIcon.BalloonTipTitle = "V1.0.0";
             this.notifyIcon.ContextMenuStrip = this.iconMenu;
             this.notifyIcon.Icon = ((System.Drawing.Icon)(resources.GetObject("notifyIcon.Icon")));
-            this.notifyIcon.Text = "Report Client";
+            this.notifyIcon.Text = "报告客户端";
             this.notifyIcon.Visible = true;
             // 
             // iconMenu
@@ -75,34 +75,34 @@
             this.iconMenuProperties,
             this.iconMenuExit});
             this.iconMenu.Name = "iconMenu";
-            this.iconMenu.Size = new System.Drawing.Size(128, 92);
+            this.iconMenu.Size = new System.Drawing.Size(99, 92);
             // 
             // iconMenuShow
             // 
             this.iconMenuShow.Name = "iconMenuShow";
-            this.iconMenuShow.Size = new System.Drawing.Size(127, 22);
-            this.iconMenuShow.Text = "Show";
+            this.iconMenuShow.Size = new System.Drawing.Size(98, 22);
+            this.iconMenuShow.Text = "显示";
             this.iconMenuShow.Click += new System.EventHandler(this.iconMenuShow_Click);
             // 
             // iconMenuHide
             // 
             this.iconMenuHide.Name = "iconMenuHide";
-            this.iconMenuHide.Size = new System.Drawing.Size(127, 22);
-            this.iconMenuHide.Text = "Hide";
+            this.iconMenuHide.Size = new System.Drawing.Size(98, 22);
+            this.iconMenuHide.Text = "隐藏";
             this.iconMenuHide.Click += new System.EventHandler(this.iconMenuHide_Click);
             // 
             // iconMenuProperties
             // 
             this.iconMenuProperties.Name = "iconMenuProperties";
-            this.iconMenuProperties.Size = new System.Drawing.Size(127, 22);
-            this.iconMenuProperties.Text = "Properties";
+            this.iconMenuProperties.Size = new System.Drawing.Size(98, 22);
+            this.iconMenuProperties.Text = "配置";
             this.iconMenuProperties.Click += new System.EventHandler(this.iconMenuProperties_Click);
             // 
             // iconMenuExit
             // 
             this.iconMenuExit.Name = "iconMenuExit";
-            this.iconMenuExit.Size = new System.Drawing.Size(127, 22);
-            this.iconMenuExit.Text = "Exit";
+            this.iconMenuExit.Size = new System.Drawing.Size(98, 22);
+            this.iconMenuExit.Text = "退出";
             this.iconMenuExit.Click += new System.EventHandler(this.iconMenuExit_Click);
             // 
             // timer
@@ -120,7 +120,7 @@
             this.MainMenuStrip = this.menuStrip;
             this.Name = "MainForm";
             this.ShowInTaskbar = false;
-            this.Text = "Report Client";
+            this.Text = "报告客户端";
             this.WindowState = System.Windows.Forms.FormWindowState.Minimized;
             this.Load += new System.EventHandler(this.MainForm_Load);
             this.iconMenu.ResumeLayout(false);

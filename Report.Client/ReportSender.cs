@@ -7,7 +7,7 @@ using System.Text;
 namespace Report.Client
 {
     // State object for receiving data from remote device.  
-    public class StateObject
+    internal class StateObject
     {
         // Client socket.  
         public Socket workSocket = null;
@@ -19,7 +19,7 @@ namespace Report.Client
         public StringBuilder sb = new StringBuilder();
     }
 
-    public class AsynchronousClient
+    internal class ReportSender
     {
         // The port number for the remote device.  
         private const int port = 11000;
@@ -31,6 +31,11 @@ namespace Report.Client
 
         // The response from the remote device.  
         private static String response = String.Empty;
+
+        public static void SendReport(ReportInfo report)
+        {
+
+        }
 
         private static void StartClient()
         {

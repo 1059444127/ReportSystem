@@ -43,7 +43,7 @@ namespace Report
         {
             if (string.IsNullOrEmpty(_strLogFilePath))
             {
-                _strLogFilePath = "c:\\ReportClient";
+                _strLogFilePath = "C:\\ReportSystem";
             }
 
             if (!Directory.Exists(_strLogFilePath))

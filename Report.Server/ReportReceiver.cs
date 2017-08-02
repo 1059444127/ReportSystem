@@ -13,7 +13,7 @@ namespace Report.Server
     using System.Threading;
 
     // State object for reading client data asynchronously  
-    public class StateObject
+    internal class StateObject
     {
         // Client  socket.  
         public Socket workSocket = null;
@@ -25,12 +25,12 @@ namespace Report.Server
         public StringBuilder sb = new StringBuilder();
     }
 
-    public class AsynchronousSocketListener
+    internal class ReportReceiver
     {
         // Thread signal.  
         public static ManualResetEvent allDone = new ManualResetEvent(false);
 
-        public AsynchronousSocketListener()
+        public ReportReceiver()
         {
         }
 
