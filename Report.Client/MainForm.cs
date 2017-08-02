@@ -28,16 +28,22 @@ namespace Report.Client
             this.notifyIcon.ShowBalloonTip(2000, "报告客户端", "v1.0.0", ToolTipIcon.Info);
             this.notifyIcon.BalloonTipClicked += NotifyIcon_BalloonTipClicked;
 
+            ReportClient.ServerIP = "127.0.0.1";
+            ReportClient.ServerPort = 11123;
+            ReportClient.PdfReportFolder = @"C:\ReportPDF";
+            ReportClient.LogPath = @"C:\ReportClientLog";
+            ReportClient.ConfirmPatientId = true;
+
             ReportClient.OnReportStatusUpdate += ReportClient_OnReportStatusUpdate;
         }
 
-        private void Show()
+        private void ShowForm()
         {
             this.WindowState = FormWindowState.Normal;
             this.ShowInTaskbar = true;
         }
 
-        private void Hide()
+        private void HideForm()
         {
             this.WindowState = FormWindowState.Minimized;
             this.ShowInTaskbar = false;
@@ -56,7 +62,7 @@ namespace Report.Client
             //check usb at specified folder
             if (IsUSBAlive())
             {
-                ReportClient.Start();   
+                ReportClient.Run();   
             }
             else
             {
@@ -73,32 +79,57 @@ namespace Report.Client
         {
             if (report.NeedConfirm())
             {
+                //should notify UI and let doctor to decide, now just test without UI
+                if(report.Status == ReportStatus.ErrorGetIdFail)
+                {
+                    report.PatientId = "newPatientID";
+                    report.Status = ReportStatus.SubmitNewPatientId;
 
+                    this.notifyIcon.ShowBalloonTip(10000, "请手动输入病人Id", "v1.0.0", ToolTipIcon.Error);
+                }
+                else if(report.Status == ReportStatus.ConfirmPatientId)
+                {
+                    report.Status = ReportStatus.SubmitOK;
+                    this.notifyIcon.ShowBalloonTip(10000, "请确认报告信息", "v1.0.0", ToolTipIcon.Warning);
+                }
+                else if(report.Status == ReportStatus.ConfirmExistReport)
+                {
+                    report.ExistReportAction = ExistReportAction.Append;
+                    report.Status = ReportStatus.SubmitExistReportAction;
+
+                    this.notifyIcon.ShowBalloonTip(10000, "请确认报告信息", "v1.0.0", ToolTipIcon.Warning);
+                }
+
+                ReportClient.SubmitReport(report);
             }
             else if (report.Status == ReportStatus.ErrorOther)
             {
                 this.notifyIcon.ShowBalloonTip(2000, report.ErrorMessage, "v1.0.0", ToolTipIcon.Info);
             }
+            else if(report.Status == ReportStatus.ConfirmOK)
+            {
+                this.notifyIcon.ShowBalloonTip(5000, "报告处理成功", "v1.0.0", ToolTipIcon.Info);
+            }
         }
 
         private void NotifyIcon_BalloonTipClicked(object sender, EventArgs e)
         {
-            Show();
+            ShowForm();
         }
 
         private void iconMenuShow_Click(object sender, EventArgs e)
         {
-            Show();
+            ShowForm();
         }
 
         private void iconMenuHide_Click(object sender, EventArgs e)
         {
-            Hide();
+            HideForm();
         }
 
         private void iconMenuProperties_Click(object sender, EventArgs e)
         {
-            Show();
+            ShowForm();
         }
         private void iconMenuExit_Click(object sender, EventArgs e)
         {

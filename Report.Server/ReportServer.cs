@@ -12,8 +12,6 @@ namespace Report.Server
         ByImage = 2
     }
 
-
-
     public class ReportServer
     {
         //listen port
@@ -42,6 +40,89 @@ namespace Report.Server
         public static void Start()
         {
 
+        }
+
+        internal static void SendReport(ReportInfo report)
+        {
+
+        }
+
+        internal static void HandleReport(ReportInfo report)
+        {
+            if(report.Status == ReportStatus.SubmitInitial)
+            {
+                //save report
+                SaveReport(report);
+
+                string patientId = ParsePatientId(report);
+                report.PatientId = patientId;
+                if(string.IsNullOrEmpty(patientId))
+                {
+                    report.Status = ReportStatus.ErrorGetIdFail;
+                    SendReport(report);
+                    return;
+                }
+
+                //check exist report
+                byte[] existReport = GetExistReport(patientId);
+                if(existReport != null)
+                {
+                    report.PdfReportExist = existReport;
+                    report.Status = ReportStatus.ConfirmExistReport;
+
+                    SendReport(report);
+                    return;
+                }
+
+                //all is OK, let client confirm whether the patientId is correct.
+                report.Status = ReportStatus.ConfirmPatientId;
+                SendReport(report);
+            }
+            else if(report.Status == ReportStatus.SubmitNewPatientId)
+            {
+                byte[] existReport = GetExistReport(report.PatientId);
+                if (existReport != null)
+                {
+                    report.PdfReportExist = existReport;
+                    report.Status = ReportStatus.ConfirmExistReport;
+
+                    SendReport(report);
+                    return;
+                }
+
+                report.Status = ReportStatus.ConfirmOK;
+                //TODO: notify main program
+
+
+                SendReport(report);
+            }
+            else if(report.Status == ReportStatus.SubmitOK)
+            {
+                //notify main program
+                report.Status = ReportStatus.ConfirmOK;
+                //TODO: notify main program
+
+
+                SendReport(report);
+            }
+        }
+
+        private static void SaveReport(ReportInfo report)
+        {
+            //save pdf to report folder
+
+            //save txt and jpg file.
+
+        }
+
+        private static string ParsePatientId(ReportInfo report)
+        {
+            return string.Empty;
+        }
+
+        private static byte[] GetExistReport(string patientId)
+        {
+            return null;
         }
     }
 }

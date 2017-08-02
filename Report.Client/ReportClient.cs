@@ -14,7 +14,7 @@ namespace Report.Client
     {
         #region Fileds/Properties
 
-        private static string _serverIP = "localhost";
+        private static string _serverIP = "127.0.0.1";
         private static int _serverPort = 11123;
         private static bool _confirmPatientId = false;
         private static string _pdfReportFolder = "";
@@ -75,11 +75,12 @@ namespace Report.Client
 
         #endregion
 
-        public static void Start()
+        public static void Run()
         {
             if (!_isRunning)
             {
                 _stopSignal = false;
+                _isRunning = true;
 
                 ThreadPool.QueueUserWorkItem(ThreadFunc);
             }
@@ -129,13 +130,14 @@ namespace Report.Client
 
         private static string QueryPdfFile()
         {
-            return string.Empty;
+            return @"C:\ReportPDF\report.pdf";
         }
 
         internal static void SubmitReport(ReportInfo report)
         {
             ReportSender.SendReport(report);
 
+            //check response
             if (report.Status == ReportStatus.ConfirmOK || report.Status == ReportStatus.ErrorOther)
             {
                 //tell main thread this report is done, can handle next report.

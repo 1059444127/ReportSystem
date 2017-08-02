@@ -19,5 +19,18 @@ namespace Report.Client
 
             return false;
         }
+
+        internal static void CopyFrom(this ReportInfo self, ReportInfo target)
+        {
+            //self.Id = target.Id;
+            self.PatientId = target.PatientId;
+            self.PatientIdNew = target.PatientIdNew;
+            self.PatientName = target.PatientName;
+            self.PdfReportExist = target.PdfReportExist;
+            //self.PdfReport = target.PdfReport;
+            self.Status = target.Status;
+            self.ExistReportAction = target.ExistReportAction;
+            self.ErrorMessage = target.ErrorMessage;
+        }
     }
 }
