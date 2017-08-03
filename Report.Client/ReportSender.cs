@@ -8,21 +8,7 @@ using System.IO;
 
 namespace Report.Client
 {
-    internal class SocketBufferHelper
-    {
-        internal Socket WorkSocket = null;
-        internal const int BufferSize = 5*1024*1024; //5M
-        internal byte[] Buffer = new byte[BufferSize];
-        internal int CurBufferPos = 0;
 
-        internal void Reset()
-        {
-            CurBufferPos = 0;
-            WorkSocket = null;
-
-            //clear buffer data
-        }
-    }
 
     internal class ReportSender
     {

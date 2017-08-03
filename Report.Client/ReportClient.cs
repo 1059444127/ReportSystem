@@ -15,7 +15,7 @@ namespace Report.Client
         #region Fileds/Properties
 
         private static string _serverIP = "127.0.0.1";
-        private static int _serverPort = 11123;
+        private static int _serverPort = 11121;
         private static bool _confirmPatientId = false;
         private static string _pdfReportFolder = "";
 

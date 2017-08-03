@@ -1,7 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Report.Server
@@ -18,6 +23,11 @@ namespace Report.Server
         private static int _port = 11121;
         private static string _reportPath = @"D:\ReportFolder";
         private static GetPatientIDMethod _parseIdMethod = GetPatientIDMethod.ByText;
+
+        private static bool _isRunning = false;
+        private static bool _stopSignal = false;
+
+        public static ManualResetEvent _connectSignal = new ManualResetEvent(false);
 
         public static int Port
         {
@@ -39,15 +49,125 @@ namespace Report.Server
 
         public static void Start()
         {
+            //start listen
+            if (_isRunning)
+                return;
 
+            _isRunning = true;
+            _stopSignal = false;
+
+            IPHostEntry ipHostInfo = Dns.GetHostEntry(Dns.GetHostName());
+            IPAddress ipAddress = ipHostInfo.AddressList[0];
+            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, ReportServer.Port);
+
+            Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+            listener.Bind(localEndPoint);
+            listener.Listen(100);
+
+            while (true)
+            {
+                try
+                {
+                    if (_stopSignal)
+                        break;
+
+                    _connectSignal.Reset();
+
+                    Console.WriteLine("Waiting for a connection...");
+                    listener.BeginAccept(new AsyncCallback(AcceptCallback), listener);
+
+                    _connectSignal.WaitOne();
+                }
+                catch (Exception ex)
+                {
+                }
+            }
+
+            _isRunning = false;
         }
 
-        internal static void SendReport(ReportInfo report)
+        public static void Stop()
         {
-
+            _stopSignal = true;
         }
 
-        internal static void HandleReport(ReportInfo report)
+        public static void AcceptCallback(IAsyncResult ar)
+        {
+            // Signal the main thread to continue.  
+            _connectSignal.Set();
+ 
+            Socket listener = (Socket)ar.AsyncState;
+            Socket handler = listener.EndAccept(ar);
+
+            SocketBufferHelper buffer = new SocketBufferHelper();
+            buffer.WorkSocket = handler;
+            handler.BeginReceive(buffer.Buffer, 0, SocketBufferHelper.BufferSize, 0, new AsyncCallback(ReceiveCallback), buffer);
+        }
+
+        public static void ReceiveCallback(IAsyncResult ar)
+        {
+            try
+            {
+                SocketBufferHelper buffer = (SocketBufferHelper)ar.AsyncState;
+                Socket socket = buffer.WorkSocket;
+
+                int bytesRead = socket.EndReceive(ar);
+
+                if (bytesRead > 0)
+                {
+                    socket.BeginReceive(buffer.Buffer, buffer.CurBufferPos, SocketBufferHelper.BufferSize, 0, new AsyncCallback(ReceiveCallback), buffer);
+                    buffer.CurBufferPos += bytesRead;
+                }
+                else
+                {
+                    using (var memStream = new MemoryStream())
+                    {
+                        var binForm = new BinaryFormatter();
+                        memStream.Write(buffer.Buffer, 0, buffer.CurBufferPos);
+                        memStream.Seek(0, SeekOrigin.Begin);
+
+                        ReportInfo report = binForm.Deserialize(memStream) as ReportInfo;
+
+                        //process report
+                        HandleReport(report, socket);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+            }
+        }
+
+        private static void SendReport(ReportInfo report, Socket socket)
+        {
+            BinaryFormatter bf = new BinaryFormatter();
+            using (var ms = new MemoryStream())
+            {
+                bf.Serialize(ms, report);
+                byte[] byteData = ms.ToArray();
+
+                socket.BeginSend(byteData, 0, byteData.Length, 0, new AsyncCallback(SendCallback), socket);
+            }   
+        }
+
+        private static void SendCallback(IAsyncResult ar)
+        {
+            try
+            {
+                Socket socket = (Socket)ar.AsyncState;
+
+                int bytesSent = socket.EndSend(ar);
+                Console.WriteLine("Sent {0} bytes to server.", bytesSent);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+            }
+        }
+
+        private static void HandleReport(ReportInfo report, Socket socket)
         {
             if(report.Status == ReportStatus.SubmitInitial)
             {
@@ -59,7 +179,7 @@ namespace Report.Server
                 if(string.IsNullOrEmpty(patientId))
                 {
                     report.Status = ReportStatus.ErrorGetIdFail;
-                    SendReport(report);
+                    SendReport(report, socket);
                     return;
                 }
 
@@ -70,13 +190,13 @@ namespace Report.Server
                     report.PdfReportExist = existReport;
                     report.Status = ReportStatus.ConfirmExistReport;
 
-                    SendReport(report);
+                    SendReport(report, socket);
                     return;
                 }
 
                 //all is OK, let client confirm whether the patientId is correct.
                 report.Status = ReportStatus.ConfirmPatientId;
-                SendReport(report);
+                SendReport(report, socket);
             }
             else if(report.Status == ReportStatus.SubmitNewPatientId)
             {
@@ -86,7 +206,7 @@ namespace Report.Server
                     report.PdfReportExist = existReport;
                     report.Status = ReportStatus.ConfirmExistReport;
 
-                    SendReport(report);
+                    SendReport(report, socket);
                     return;
                 }
 
@@ -94,7 +214,7 @@ namespace Report.Server
                 //TODO: notify main program
 
 
-                SendReport(report);
+                SendReport(report, socket);
             }
             else if(report.Status == ReportStatus.SubmitOK)
             {
@@ -103,7 +223,7 @@ namespace Report.Server
                 //TODO: notify main program
 
 
-                SendReport(report);
+                SendReport(report, socket);
             }
         }
 
@@ -117,7 +237,7 @@ namespace Report.Server
 
         private static string ParsePatientId(ReportInfo report)
         {
-            return string.Empty;
+            return "ServerParsedPatientId";
         }
 
         private static byte[] GetExistReport(string patientId)
