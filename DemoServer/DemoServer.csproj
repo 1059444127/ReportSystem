@@ -77,6 +77,16 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Report.Common\Report.Common.csproj">
+      <Project>{4672465f-2e7c-41c6-9479-026bb92583e1}</Project>
+      <Name>Report.Common</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Report.Server\Report.Server.csproj">
+      <Project>{6b738ad9-3627-4b62-8caf-55b77c8c849a}</Project>
+      <Name>Report.Server</Name>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

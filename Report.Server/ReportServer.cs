@@ -17,6 +17,35 @@ namespace Report.Server
         ByImage = 2
     }
 
+    public class ReportEventArg : EventArgs
+    {
+        public string PatientId
+        {
+            get;
+            set;
+        }
+
+        public string ReportPath
+        {
+            get;
+            set;
+        }
+
+        public string CallingIP
+        {
+            get;
+            set;
+        }
+
+        public bool IsOverwriteExist
+        {
+            get;
+            set;
+        }
+    }
+
+    public delegate void ReportEventHandler(ReportEventArg arg);
+
     public class ReportServer
     {
         //listen port
@@ -28,6 +57,8 @@ namespace Report.Server
         private static bool _stopSignal = false;
 
         public static ManualResetEvent _connectSignal = new ManualResetEvent(false);
+
+        public static event ReportEventHandler OnReportArrive;
 
         public static int Port
         {
@@ -105,7 +136,7 @@ namespace Report.Server
             handler.BeginReceive(buffer.Buffer, 0, SocketBufferHelper.BufferSize, 0, new AsyncCallback(ReceiveCallback), buffer);
         }
 
-        public static void ReceiveCallback(IAsyncResult ar)
+        private static void ReceiveCallback(IAsyncResult ar)
         {
             try
             {
@@ -128,6 +159,7 @@ namespace Report.Server
                         memStream.Seek(0, SeekOrigin.Begin);
 
                         ReportInfo report = binForm.Deserialize(memStream) as ReportInfo;
+                        report.CallingIP = socket.RemoteEndPoint.ToString();
 
                         //process report
                         HandleReport(report, socket);
@@ -213,6 +245,16 @@ namespace Report.Server
                 report.Status = ReportStatus.ConfirmOK;
                 //TODO: notify main program
 
+                if(OnReportArrive != null)
+                {
+                    ReportEventArg arg = new ReportEventArg();
+                    arg.IsOverwriteExist = report.ExistReportAction == ExistReportAction.Overwrite;
+                    arg.PatientId = report.PatientId;
+                    arg.CallingIP = report.CallingIP;
+                    arg.ReportPath = report.GetReportPath();
+
+                    OnReportArrive(arg);
+                }
 
                 SendReport(report, socket);
             }
@@ -220,8 +262,15 @@ namespace Report.Server
             {
                 //notify main program
                 report.Status = ReportStatus.ConfirmOK;
-                //TODO: notify main program
 
+                //TODO: notify main program
+                ReportEventArg arg = new ReportEventArg();
+                arg.IsOverwriteExist = report.ExistReportAction == ExistReportAction.Overwrite;
+                arg.PatientId = report.PatientId;
+                arg.CallingIP = report.CallingIP;
+                arg.ReportPath = report.GetReportPath();
+
+                OnReportArrive(arg);
 
                 SendReport(report, socket);
             }
@@ -230,7 +279,25 @@ namespace Report.Server
         private static void SaveReport(ReportInfo report)
         {
             //save pdf to report folder
+            string path = report.GetReportPath();
+            if(!Directory.Exists(path))
+            {
+                Directory.CreateDirectory(path);
+            }
 
+            string file = Path.Combine(path, "Report.pdf");
+            //if(report.ExistReportAction == ExistReportAction.Overwrite)
+            {
+                using (FileStream fs = new FileStream(file, FileMode.CreateNew))
+                {
+                    fs.Write(report.PdfReport, 0, report.PdfReport.Length);
+                    fs.Flush();
+                }
+            }
+            //else
+            {
+
+            }
             //save txt and jpg file.
 
         }

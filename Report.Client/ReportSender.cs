@@ -25,21 +25,21 @@ namespace Report.Client
                 _curReport = report;
 
                 IPEndPoint serverEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), ReportClient.ServerPort);
-                Socket clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                  
-                clientSocket.BeginConnect(serverEndPoint, new AsyncCallback(ConnectCallback), clientSocket);
+                socket.BeginConnect(serverEndPoint, new AsyncCallback(ConnectCallback), socket);
                 _connectDone.WaitOne();
 
-                Send(clientSocket, report);
+                Send(socket, report);
                 _sendDone.WaitOne();
 
-                Receive(clientSocket);
+                Receive(socket);
                 _receiveDone.WaitOne();
 
                 Console.WriteLine("Response received");
 
-                clientSocket.Shutdown(SocketShutdown.Both);
-                clientSocket.Close();
+                socket.Shutdown(SocketShutdown.Both);
+                socket.Close();
             }
             catch (Exception e)
             {

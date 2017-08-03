@@ -24,7 +24,7 @@ namespace Report.Client
         {
             //self.Id = target.Id;
             self.PatientId = target.PatientId;
-            self.PatientIdNew = target.PatientIdNew;
+            self.CallingIP = target.CallingIP;
             self.PatientName = target.PatientName;
             self.PdfReportExist = target.PdfReportExist;
             //self.PdfReport = target.PdfReport;

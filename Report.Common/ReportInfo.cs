@@ -33,7 +33,7 @@ namespace Report
     {
         private ReportStatus _status = ReportStatus.Unknown;
         private string _patientId;
-        private string _patientIdNew;
+        private string _callingIP;
         private string _patientName;
         private byte[] _pdfReport;
         private byte[] _pdfReportExist;
@@ -58,16 +58,16 @@ namespace Report
             set { _patientId = value; }
         }
 
-        public string PatientIdNew
-        {
-            get { return _patientIdNew; }
-            set { _patientIdNew = value; }
-        }
-
         public string PatientName
         {
             get { return _patientName; }
             set { _patientName = value; }
+        }
+
+        public string CallingIP
+        {
+            get { return _callingIP; }
+            set { _callingIP = value; }
         }
 
         public byte[] PdfReport
