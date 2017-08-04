@@ -48,7 +48,8 @@ namespace Report.Server
 
     public class ReportServer
     {
-        //listen port
+        #region Fields/Properties
+
         private static int _port = 11121;
         private static string _reportPath = @"D:\ReportFolder";
         private static GetPatientIDMethod _parseIdMethod = GetPatientIDMethod.ByText;
@@ -78,6 +79,14 @@ namespace Report.Server
             set { _parseIdMethod = value; }
         }
 
+        public static string LogPath
+        {
+            get { return Utils.LogMgr.LogPath; }
+            set { Utils.LogMgr.LogPath = value; }
+        }
+
+        #endregion
+
         public static void Start()
         {
             //start listen
@@ -87,11 +96,15 @@ namespace Report.Server
                 _stopSignal = false;
 
                 ThreadPool.QueueUserWorkItem(ThreadFunc);
+
+                Utils.Log("Report server started, thread {0}", Thread.CurrentThread.ManagedThreadId);
             }
         }
 
         public static void Stop()
         {
+            Utils.Log("Report server get stop signal");
+
             _stopSignal = true;
             _connectSignal.Set();
         }
@@ -111,35 +124,45 @@ namespace Report.Server
 
                     _connectSignal.Reset();
 
-                    Console.WriteLine("Waiting for a connection...");
+                    Utils.Log("Waiting for a connection...");
                     listener.BeginAcceptTcpClient(new AsyncCallback(ConnectCallback), listener);
 
                     _connectSignal.WaitOne();
                 }
                 catch (Exception ex)
                 {
+                    Utils.Log("Exception from report server main thread, message: " + ex.Message);
+                    Utils.Log(ex.StackTrace);
                 }
             }
 
             listener.Stop();
             _isRunning = false;
+
+            Utils.Log("Report server stopped");
         }
 
         private static void ConnectCallback(IAsyncResult ar)
         {
             // Signal the main thread to continue.  
             _connectSignal.Set();
+            if (_stopSignal)
+                return;
+
+            TcpListener listener = (TcpListener)ar.AsyncState;
+            TcpClient client = listener.EndAcceptTcpClient(ar);
+            //client.SendTimeout = 5000;
+            //client.ReceiveTimeout = 5000;
+            string remoteIP = client.Client.RemoteEndPoint.ToString().Split(':')[0];
 
             try
             {
-                TcpListener listener = (TcpListener)ar.AsyncState;
-                TcpClient client = listener.EndAcceptTcpClient(ar);
-                //client.SendTimeout = 5000;
-                //client.ReceiveTimeout = 5000;
+                Utils.Log("Get report submitted from " + remoteIP);
 
                 using (var socketStream = client.GetStream())
                 {
                     ReportInfo report = ReportSendReceiver.ReceiveReport(socketStream);
+                    report.CallingIP = remoteIP;
 
                     HandleReport(report, socketStream);
                 }
@@ -148,22 +171,29 @@ namespace Report.Server
             }
             catch(Exception ex)
             {
-
+                Utils.Log("Exception when handle connection from {0}, error: {1}", remoteIP, ex.Message);
+                Utils.Log(ex.StackTrace);
             }
         }
 
         private static void HandleReport(ReportInfo report, NetworkStream socket)
         {
-            if(report.Status == ReportStatus.SubmitInitial)
+            Utils.Log("Start handle report with status:{0}, id:{1}, thread:{2}", report.Status, report.Id, Thread.CurrentThread.ManagedThreadId);
+
+            if (report.Status == ReportStatus.SubmitInitial)
             {
                 //save report
                 SaveReport(report);
 
                 string patientId = ParsePatientId(report);
                 report.PatientId = patientId;
-                if(string.IsNullOrEmpty(patientId))
+                Utils.Log("Try parse PatientId, and patientId is: " + patientId);
+
+                if (string.IsNullOrEmpty(patientId))
                 {
-                    report.Status = ReportStatus.ErrorGetIdFail;
+                    Utils.Log("Failed parse patientId, send to client to confirm");
+
+                    report.Status = ReportStatus.FailedGetPatientId;
                     ReportSendReceiver.SendReport(report, socket);
 
                     return;
@@ -173,6 +203,8 @@ namespace Report.Server
                 byte[] existReport = GetExistReport(patientId);
                 if(existReport != null)
                 {
+                    Utils.Log("Patient already has report, send client to confirm");
+
                     report.PdfReportExist = existReport;
                     report.Status = ReportStatus.ConfirmExistReport;
 
@@ -181,14 +213,19 @@ namespace Report.Server
                 }
 
                 //all is OK, let client confirm whether the patientId is correct.
+                Utils.Log("All is OK, send client to confirm");
                 report.Status = ReportStatus.ConfirmPatientId;
                 ReportSendReceiver.SendReport(report, socket);
             }
             else if(report.Status == ReportStatus.SubmitNewPatientId)
             {
+                Utils.Log("Client changed patientId, the new patienId is: " + report.PatientId);
+
                 byte[] existReport = GetExistReport(report.PatientId);
                 if (existReport != null)
                 {
+                    Utils.Log("Patient already has report, send client to confirm");
+
                     report.PdfReportExist = existReport;
                     report.Status = ReportStatus.ConfirmExistReport;
 
@@ -196,8 +233,8 @@ namespace Report.Server
                     return;
                 }
 
+                Utils.Log("Client confirmed OK, report handle finish!");
                 report.Status = ReportStatus.ConfirmOK;
-                //TODO: notify main program
 
                 if(ReportReceiveEvent != null)
                 {
@@ -214,10 +251,9 @@ namespace Report.Server
             }
             else if(report.Status == ReportStatus.SubmitOK)
             {
-                //notify main program
+                Utils.Log("Client confirmed OK, report handle finish!");
                 report.Status = ReportStatus.ConfirmOK;
 
-                //TODO: notify main program
                 if (ReportReceiveEvent != null)
                 {
                     ReportReceiveEventArg arg = new ReportReceiveEventArg();

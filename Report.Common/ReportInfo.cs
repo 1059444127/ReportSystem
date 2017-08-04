@@ -16,8 +16,8 @@ namespace Report
         ConfirmPatientId = 20,          //server let client confirm patientid
         ConfirmExistReport = 21,        //server let client confirm how to handle exist report
         ConfirmOK = 22,                 //server finish the report and tell client all is ok
-        ErrorGetIdFail = 30,            //server has failed to get patientid
-        ErrorOther  = 31                //server get other error
+        FailedGetPatientId = 30,        //server has failed to get patientid
+        Error  = 51                     //server get other error
     }
 
     public enum ExistReportAction

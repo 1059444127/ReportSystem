@@ -31,7 +31,7 @@ namespace Report.Client
             ReportClient.ServerIP = "127.0.0.1";
             ReportClient.ServerPort = 11121;
             ReportClient.PdfReportFolder = @"C:\ReportPDF";
-            ReportClient.LogPath = @"C:\ReportClientLog";
+            ReportClient.LogPath = @"C:\ReportLog\Client";
             ReportClient.NeedConfirmPatientId = true;
 
             ReportClient.ReportSendEvent += ReportClient_ReportSendEventHandler;
@@ -87,7 +87,7 @@ namespace Report.Client
             if (report.NeedConfirm())
             {
                 //should notify UI and let doctor to decide, now just test without UI
-                if(report.Status == ReportStatus.ErrorGetIdFail)
+                if(report.Status == ReportStatus.FailedGetPatientId)
                 {
                     report.PatientId = "newPatientID";
                     report.Status = ReportStatus.SubmitNewPatientId;
@@ -109,7 +109,7 @@ namespace Report.Client
 
                 ReportClient.SetReportConfirmed(report);
             }
-            else if (report.Status == ReportStatus.ErrorOther)
+            else if (report.Status == ReportStatus.Error)
             {
                 this.notifyIcon.ShowBalloonTip(2000, report.ErrorMessage, "v1.0.0", ToolTipIcon.Info);
             }

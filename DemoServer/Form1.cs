@@ -25,6 +25,7 @@ namespace DemoServer
             ReportServer.Port = 11121;
             ReportServer.ReportPath = "D:\\Report";
             ReportServer.ReportReceiveEvent += ReportServer_OnReportReceive;
+            ReportServer.LogPath = @"C:\ReportLog\Server";
 
             ReportServer.Start();
             _reportServerStarted = true;
@@ -43,7 +44,7 @@ namespace DemoServer
             {
                 ReportServer.Start();
                 btnStopReportServer.Text = "Stop Report Server";
-                _reportServerStarted = false;
+                _reportServerStarted = true;
             }
         }
 

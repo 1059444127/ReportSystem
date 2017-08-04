@@ -47,9 +47,8 @@ namespace Report.Client
         private static string _serverIP = "127.0.0.1";
         private static int _serverPort = 11121;
         private static bool _needConfirmPatientId = false;
-        private static string _pdfReportFolder = "";
+        private static string _pdfReportFolder = @"C:\ReportPDF";
 
-        private static string _logPath = @"C:\ReportClientLog";
         private static string _usbUID;
         private static string _doctorSignImage;
 
@@ -86,8 +85,8 @@ namespace Report.Client
 
         public static string LogPath
         {
-            get { return _logPath; }
-            set { _logPath = value; }
+            get { return Utils.LogMgr.LogPath; }
+            set { Utils.LogMgr.LogPath = value; }
         }
 
         public static string UsbUID
@@ -112,6 +111,8 @@ namespace Report.Client
                 _isRunning = true;
 
                 ThreadPool.QueueUserWorkItem(ThreadFunc);
+
+                Utils.Log("Report Client started");
             }
         }
 
@@ -121,6 +122,8 @@ namespace Report.Client
         public static void Stop()
         {
             _stopSignal = true;
+
+            Utils.Log("Report Client get stop signal");
         }
 
         /// <summary>
@@ -129,6 +132,7 @@ namespace Report.Client
         /// <param name="report"></param>
         public static void SetReportConfirmed(ReportInfo report)
         {
+            Utils.Log("Report confirmed, current satus: " + report.Status);
             _reportConfirmedSignal.Set();
         }
 
@@ -154,6 +158,8 @@ namespace Report.Client
                     report.PdfReport = File.ReadAllBytes(pdfFile);
                     report.Status = ReportStatus.SubmitInitial;
 
+                    Utils.Log("Start to handle new report, id:{0}, path:{1}", report.Id, pdfFile);
+
                     bool reportDone = false;
                     do
                     {
@@ -164,10 +170,13 @@ namespace Report.Client
 
                         using(NetworkStream socketStream = client.GetStream())
                         {
+                            Utils.Log("Send report with status: " + report.Status);
                             ReportSendReceiver.SendReport(report, socketStream);
 
                             report = ReportSendReceiver.ReceiveReport(socketStream);
-                            if (report.Status == ReportStatus.ConfirmOK || report.Status == ReportStatus.ErrorOther)
+                            Utils.Log("Receive report with status: " + report.Status);
+
+                            if (report.Status == ReportStatus.ConfirmOK || report.Status == ReportStatus.Error)
                             {
                                 reportDone = true;
                             }
@@ -184,14 +193,29 @@ namespace Report.Client
                             }
                         }
 
-                        //client.Close();
+                        client.Close();
                     }
                     while (!reportDone);
 
                     //4. clear work
                     if (ReportSendEvent != null)
                     {
-                        ReportSendEvent(new ReportSendEventArg() { HasError = report.Status == ReportStatus.ErrorOther, Report = report, NeedConfirm = report.NeedConfirm() });
+                        ReportSendEvent(new ReportSendEventArg() { HasError = report.Status == ReportStatus.Error, Report = report, NeedConfirm = report.NeedConfirm() });
+                    }
+
+                    Utils.Log("Report done with status: " + report.Status);
+
+                    if (report.Status == ReportStatus.Error)
+                    {
+                        //move to error report folder
+                        Utils.Log("Report has error, will send to errorbox. error: " + report.ErrorMessage);
+
+                        string targetFile = Path.Combine(PdfReportFolder, "Errorbox", Path.GetFileName(pdfFile));
+                        File.Move(pdfFile, targetFile);
+                    }
+                    else
+                    {
+                        File.Delete(pdfFile);
                     }
                 }
                 catch(Exception ex)
@@ -201,16 +225,28 @@ namespace Report.Client
                         ReportSendEvent(new ReportSendEventArg() { HasError = true, ErrorMessage = ex.Message });
                     }
 
+                    Utils.Log("Exception happen from Report Client main thread, message: " + ex.Message);
+                    Utils.Log(ex.StackTrace);
+
                     Thread.Sleep(1000);
                 }
             }
 
             _isRunning = false;
+            Utils.Log("Report Client stopped");
         }
 
         private static string QueryPdfFile()
         {
-            return @"C:\ReportPDF\report.pdf";
+            DirectoryInfo di = new DirectoryInfo(PdfReportFolder);
+            var files = di.EnumerateFiles("*.pdf");
+
+            if(files.Count() > 0)
+            {
+                return files.First().FullName;
+            }
+
+            return string.Empty;
         }
     }
 }

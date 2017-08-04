@@ -8,11 +8,13 @@ namespace Report.Client
 {
     internal static class Utils
     {
+        private static LogManager _logMgr = new LogManager();
+
         internal static bool NeedConfirm(this ReportInfo report)
         {
             if (report.Status == ReportStatus.ConfirmExistReport)
                 return true;
-            else if (report.Status == ReportStatus.ErrorGetIdFail)
+            else if (report.Status == ReportStatus.FailedGetPatientId)
                 return true;
             else if (report.Status == ReportStatus.ConfirmPatientId && ReportClient.NeedConfirmPatientId)
                 return true;
@@ -31,6 +33,21 @@ namespace Report.Client
             self.Status = target.Status;
             self.ExistReportAction = target.ExistReportAction;
             self.ErrorMessage = target.ErrorMessage;
+        }
+
+        internal static LogManager LogMgr
+        {
+            get { return _logMgr; }
+        }
+
+        internal static void Log(string format, params object[] values)
+        {
+            LogMgr.Log(format, values);
+        }
+
+        internal static void Error(string format, params object[] values)
+        {
+            LogMgr.Error(format, values);
         }
     }
 }
