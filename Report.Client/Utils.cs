@@ -14,7 +14,7 @@ namespace Report.Client
                 return true;
             else if (report.Status == ReportStatus.ErrorGetIdFail)
                 return true;
-            else if (report.Status == ReportStatus.ConfirmPatientId && ReportClient.ConfirmPatientId)
+            else if (report.Status == ReportStatus.ConfirmPatientId && ReportClient.NeedConfirmPatientId)
                 return true;
 
             return false;

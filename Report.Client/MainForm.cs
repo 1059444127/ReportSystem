@@ -29,12 +29,12 @@ namespace Report.Client
             this.notifyIcon.BalloonTipClicked += NotifyIcon_BalloonTipClicked;
 
             ReportClient.ServerIP = "127.0.0.1";
-            ReportClient.ServerPort = 11123;
+            ReportClient.ServerPort = 11121;
             ReportClient.PdfReportFolder = @"C:\ReportPDF";
             ReportClient.LogPath = @"C:\ReportClientLog";
-            ReportClient.ConfirmPatientId = true;
+            ReportClient.NeedConfirmPatientId = true;
 
-            ReportClient.OnReportStatusUpdate += ReportClient_OnReportStatusUpdate;
+            ReportClient.ReportSendEvent += ReportClient_ReportSendEventHandler;
         }
 
         private void ShowForm()
@@ -62,7 +62,7 @@ namespace Report.Client
             //check usb at specified folder
             if (IsUSBAlive())
             {
-                ReportClient.Run();   
+                ReportClient.Start();   
             }
             else
             {
@@ -75,8 +75,15 @@ namespace Report.Client
             return true;
         }
 
-        void ReportClient_OnReportStatusUpdate(ReportInfo report)
+        void ReportClient_ReportSendEventHandler(ReportSendEventArg arg)
         {
+            if (arg.HasError)
+            {
+                this.notifyIcon.ShowBalloonTip(2000, arg.ErrorMessage, "v1.0.0", ToolTipIcon.Info);
+                return;
+            }
+
+            ReportInfo report = arg.Report;
             if (report.NeedConfirm())
             {
                 //should notify UI and let doctor to decide, now just test without UI
@@ -100,7 +107,7 @@ namespace Report.Client
                     this.notifyIcon.ShowBalloonTip(10000, "请确认报告信息", "v1.0.0", ToolTipIcon.Warning);
                 }
 
-                ReportClient.SubmitReport(report);
+                ReportClient.SetReportConfirmed(report);
             }
             else if (report.Status == ReportStatus.ErrorOther)
             {

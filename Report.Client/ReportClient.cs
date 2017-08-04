@@ -2,13 +2,43 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Report.Client
 {
-    internal delegate void ReportStatusUpdateHandler(ReportInfo report);
+    internal class ReportSendEventArg : EventArgs
+    {
+        internal bool HasError
+        {
+            get;
+            set;
+        }
+
+        internal string ErrorMessage
+        {
+            get;
+            set;
+        }
+
+        internal bool NeedConfirm
+        {
+            get;
+            set;
+        }
+
+        internal ReportInfo Report
+        {
+            get;
+            set;
+        }
+    }
+
+    internal delegate void ReportSendEventHandler(ReportSendEventArg arg);
 
     internal class ReportClient
     {
@@ -16,7 +46,7 @@ namespace Report.Client
 
         private static string _serverIP = "127.0.0.1";
         private static int _serverPort = 11121;
-        private static bool _confirmPatientId = false;
+        private static bool _needConfirmPatientId = false;
         private static string _pdfReportFolder = "";
 
         private static string _logPath = @"C:\ReportClientLog";
@@ -25,11 +55,10 @@ namespace Report.Client
 
         //e.g. user plugin usb, start, and if plugoff the usb, then need to stop
         private static bool _stopSignal = false;
-        private static ManualResetEvent _reportConfirmSignal = new ManualResetEvent(false);
-        private static ManualResetEvent _reportDoneSignal = new ManualResetEvent(false);
         private static bool _isRunning = false;
+        private static ManualResetEvent _reportConfirmedSignal = new ManualResetEvent(false);
 
-        public static event ReportStatusUpdateHandler OnReportStatusUpdate;
+        public static event ReportSendEventHandler ReportSendEvent;
 
         public static string ServerIP
         {
@@ -43,10 +72,10 @@ namespace Report.Client
             set { _serverPort = value; }
         }
 
-        public static bool ConfirmPatientId
+        public static bool NeedConfirmPatientId
         {
-            get { return _confirmPatientId; }
-            set { _confirmPatientId = value; }
+            get { return _needConfirmPatientId; }
+            set { _needConfirmPatientId = value; }
         }
 
         public static string PdfReportFolder
@@ -75,7 +104,7 @@ namespace Report.Client
 
         #endregion
 
-        public static void Run()
+        public static void Start()
         {
             if (!_isRunning)
             {
@@ -94,6 +123,15 @@ namespace Report.Client
             _stopSignal = true;
         }
 
+        /// <summary>
+        /// called after client side confirmed the report
+        /// </summary>
+        /// <param name="report"></param>
+        public static void SetReportConfirmed(ReportInfo report)
+        {
+            _reportConfirmedSignal.Set();
+        }
+
         private static void ThreadFunc(object ctx)
         {
             while(true)
@@ -103,6 +141,7 @@ namespace Report.Client
                     if (_stopSignal)
                         break;
 
+                    //1. get new pdf file
                     string pdfFile = QueryPdfFile();
                     if (string.IsNullOrEmpty(pdfFile))
                     {
@@ -110,17 +149,58 @@ namespace Report.Client
                         continue;
                     }
 
+                    //2. start handle report
                     ReportInfo report = new ReportInfo();
                     report.PdfReport = File.ReadAllBytes(pdfFile);
                     report.Status = ReportStatus.SubmitInitial;
 
-                    SubmitReport(report);
+                    bool reportDone = false;
+                    do
+                    {
+                        TcpClient client = new TcpClient();
+                        //client.SendTimeout = 5000;//5s
+                        //client.ReceiveTimeout = 5000;//5s
+                        client.Connect(IPAddress.Parse(ServerIP), ServerPort);//it will throw an exception if failed to connect.
 
-                    //wait for the last report finish signal
-                    _reportDoneSignal.WaitOne();
+                        using(NetworkStream socketStream = client.GetStream())
+                        {
+                            ReportSendReceiver.SendReport(report, socketStream);
+
+                            report = ReportSendReceiver.ReceiveReport(socketStream);
+                            if (report.Status == ReportStatus.ConfirmOK || report.Status == ReportStatus.ErrorOther)
+                            {
+                                reportDone = true;
+                            }
+                            else
+                            {
+                                _reportConfirmedSignal.Reset();
+
+                                if (ReportSendEvent != null)
+                                {
+                                    ReportSendEvent(new ReportSendEventArg() { HasError = false, Report = report, NeedConfirm = report.NeedConfirm() });
+                                }
+
+                                _reportConfirmedSignal.WaitOne();
+                            }
+                        }
+
+                        //client.Close();
+                    }
+                    while (!reportDone);
+
+                    //4. clear work
+                    if (ReportSendEvent != null)
+                    {
+                        ReportSendEvent(new ReportSendEventArg() { HasError = report.Status == ReportStatus.ErrorOther, Report = report, NeedConfirm = report.NeedConfirm() });
+                    }
                 }
                 catch(Exception ex)
                 {
+                    if (ReportSendEvent != null)
+                    {
+                        ReportSendEvent(new ReportSendEventArg() { HasError = true, ErrorMessage = ex.Message });
+                    }
+
                     Thread.Sleep(1000);
                 }
             }
@@ -131,23 +211,6 @@ namespace Report.Client
         private static string QueryPdfFile()
         {
             return @"C:\ReportPDF\report.pdf";
-        }
-
-        internal static void SubmitReport(ReportInfo report)
-        {
-            ReportSender.SendReport(report);
-
-            //check response
-            if (report.Status == ReportStatus.ConfirmOK || report.Status == ReportStatus.ErrorOther)
-            {
-                //tell main thread this report is done, can handle next report.
-                _reportDoneSignal.Set();
-            }
-
-            if(OnReportStatusUpdate != null)
-            {
-                OnReportStatusUpdate(report);
-            }
         }
     }
 }

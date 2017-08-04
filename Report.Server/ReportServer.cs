@@ -17,7 +17,7 @@ namespace Report.Server
         ByImage = 2
     }
 
-    public class ReportEventArg : EventArgs
+    public class ReportReceiveEventArg : EventArgs
     {
         public string PatientId
         {
@@ -44,7 +44,7 @@ namespace Report.Server
         }
     }
 
-    public delegate void ReportEventHandler(ReportEventArg arg);
+    public delegate void ReportReceiveEventHandler(ReportReceiveEventArg arg);
 
     public class ReportServer
     {
@@ -58,7 +58,7 @@ namespace Report.Server
 
         public static ManualResetEvent _connectSignal = new ManualResetEvent(false);
 
-        public static event ReportEventHandler OnReportArrive;
+        public static event ReportReceiveEventHandler ReportReceiveEvent;
 
         public static int Port
         {
@@ -81,20 +81,26 @@ namespace Report.Server
         public static void Start()
         {
             //start listen
-            if (_isRunning)
-                return;
+            if (!_isRunning)
+            {
+                _isRunning = true;
+                _stopSignal = false;
 
-            _isRunning = true;
-            _stopSignal = false;
+                ThreadPool.QueueUserWorkItem(ThreadFunc);
+            }
+        }
 
-            IPHostEntry ipHostInfo = Dns.GetHostEntry(Dns.GetHostName());
-            IPAddress ipAddress = ipHostInfo.AddressList[0];
-            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, ReportServer.Port);
+        public static void Stop()
+        {
+            _stopSignal = true;
+            _connectSignal.Set();
+        }
 
-            Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-
-            listener.Bind(localEndPoint);
-            listener.Listen(100);
+        private static void ThreadFunc(object ctx)
+        {
+            IPAddress ipAddress = IPAddress.Parse("127.0.0.1");
+            TcpListener listener = new TcpListener(ipAddress, Port);
+            listener.Start();
 
             while (true)
             {
@@ -106,7 +112,7 @@ namespace Report.Server
                     _connectSignal.Reset();
 
                     Console.WriteLine("Waiting for a connection...");
-                    listener.BeginAccept(new AsyncCallback(AcceptCallback), listener);
+                    listener.BeginAcceptTcpClient(new AsyncCallback(ConnectCallback), listener);
 
                     _connectSignal.WaitOne();
                 }
@@ -115,91 +121,38 @@ namespace Report.Server
                 }
             }
 
+            listener.Stop();
             _isRunning = false;
         }
 
-        public static void Stop()
-        {
-            _stopSignal = true;
-        }
-
-        public static void AcceptCallback(IAsyncResult ar)
+        private static void ConnectCallback(IAsyncResult ar)
         {
             // Signal the main thread to continue.  
             _connectSignal.Set();
- 
-            Socket listener = (Socket)ar.AsyncState;
-            Socket handler = listener.EndAccept(ar);
 
-            SocketBufferHelper buffer = new SocketBufferHelper();
-            buffer.WorkSocket = handler;
-            handler.BeginReceive(buffer.Buffer, 0, SocketBufferHelper.BufferSize, 0, new AsyncCallback(ReceiveCallback), buffer);
-        }
-
-        private static void ReceiveCallback(IAsyncResult ar)
-        {
             try
             {
-                SocketBufferHelper buffer = (SocketBufferHelper)ar.AsyncState;
-                Socket socket = buffer.WorkSocket;
+                TcpListener listener = (TcpListener)ar.AsyncState;
+                TcpClient client = listener.EndAcceptTcpClient(ar);
+                //client.SendTimeout = 5000;
+                //client.ReceiveTimeout = 5000;
 
-                int bytesRead = socket.EndReceive(ar);
-
-                if (bytesRead > 0)
+                using (var socketStream = client.GetStream())
                 {
-                    socket.BeginReceive(buffer.Buffer, buffer.CurBufferPos, SocketBufferHelper.BufferSize, 0, new AsyncCallback(ReceiveCallback), buffer);
-                    buffer.CurBufferPos += bytesRead;
+                    ReportInfo report = ReportSendReceiver.ReceiveReport(socketStream);
+
+                    HandleReport(report, socketStream);
                 }
-                else
-                {
-                    using (var memStream = new MemoryStream())
-                    {
-                        var binForm = new BinaryFormatter();
-                        memStream.Write(buffer.Buffer, 0, buffer.CurBufferPos);
-                        memStream.Seek(0, SeekOrigin.Begin);
 
-                        ReportInfo report = binForm.Deserialize(memStream) as ReportInfo;
-                        report.CallingIP = socket.RemoteEndPoint.ToString();
-
-                        //process report
-                        HandleReport(report, socket);
-                    }
-                }
+                client.Close();
             }
-            catch (Exception e)
+            catch(Exception ex)
             {
-                Console.WriteLine(e.ToString());
+
             }
         }
 
-        private static void SendReport(ReportInfo report, Socket socket)
-        {
-            BinaryFormatter bf = new BinaryFormatter();
-            using (var ms = new MemoryStream())
-            {
-                bf.Serialize(ms, report);
-                byte[] byteData = ms.ToArray();
-
-                socket.BeginSend(byteData, 0, byteData.Length, 0, new AsyncCallback(SendCallback), socket);
-            }   
-        }
-
-        private static void SendCallback(IAsyncResult ar)
-        {
-            try
-            {
-                Socket socket = (Socket)ar.AsyncState;
-
-                int bytesSent = socket.EndSend(ar);
-                Console.WriteLine("Sent {0} bytes to server.", bytesSent);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.ToString());
-            }
-        }
-
-        private static void HandleReport(ReportInfo report, Socket socket)
+        private static void HandleReport(ReportInfo report, NetworkStream socket)
         {
             if(report.Status == ReportStatus.SubmitInitial)
             {
@@ -211,7 +164,8 @@ namespace Report.Server
                 if(string.IsNullOrEmpty(patientId))
                 {
                     report.Status = ReportStatus.ErrorGetIdFail;
-                    SendReport(report, socket);
+                    ReportSendReceiver.SendReport(report, socket);
+
                     return;
                 }
 
@@ -222,13 +176,13 @@ namespace Report.Server
                     report.PdfReportExist = existReport;
                     report.Status = ReportStatus.ConfirmExistReport;
 
-                    SendReport(report, socket);
+                    ReportSendReceiver.SendReport(report, socket);
                     return;
                 }
 
                 //all is OK, let client confirm whether the patientId is correct.
                 report.Status = ReportStatus.ConfirmPatientId;
-                SendReport(report, socket);
+                ReportSendReceiver.SendReport(report, socket);
             }
             else if(report.Status == ReportStatus.SubmitNewPatientId)
             {
@@ -238,25 +192,25 @@ namespace Report.Server
                     report.PdfReportExist = existReport;
                     report.Status = ReportStatus.ConfirmExistReport;
 
-                    SendReport(report, socket);
+                    ReportSendReceiver.SendReport(report, socket);
                     return;
                 }
 
                 report.Status = ReportStatus.ConfirmOK;
                 //TODO: notify main program
 
-                if(OnReportArrive != null)
+                if(ReportReceiveEvent != null)
                 {
-                    ReportEventArg arg = new ReportEventArg();
+                    ReportReceiveEventArg arg = new ReportReceiveEventArg();
                     arg.IsOverwriteExist = report.ExistReportAction == ExistReportAction.Overwrite;
                     arg.PatientId = report.PatientId;
                     arg.CallingIP = report.CallingIP;
                     arg.ReportPath = report.GetReportPath();
 
-                    OnReportArrive(arg);
+                    ReportReceiveEvent(arg);
                 }
 
-                SendReport(report, socket);
+                ReportSendReceiver.SendReport(report, socket);
             }
             else if(report.Status == ReportStatus.SubmitOK)
             {
@@ -264,15 +218,18 @@ namespace Report.Server
                 report.Status = ReportStatus.ConfirmOK;
 
                 //TODO: notify main program
-                ReportEventArg arg = new ReportEventArg();
-                arg.IsOverwriteExist = report.ExistReportAction == ExistReportAction.Overwrite;
-                arg.PatientId = report.PatientId;
-                arg.CallingIP = report.CallingIP;
-                arg.ReportPath = report.GetReportPath();
+                if (ReportReceiveEvent != null)
+                {
+                    ReportReceiveEventArg arg = new ReportReceiveEventArg();
+                    arg.IsOverwriteExist = report.ExistReportAction == ExistReportAction.Overwrite;
+                    arg.PatientId = report.PatientId;
+                    arg.CallingIP = report.CallingIP;
+                    arg.ReportPath = report.GetReportPath();
 
-                OnReportArrive(arg);
+                    ReportReceiveEvent(arg);
+                }
 
-                SendReport(report, socket);
+                ReportSendReceiver.SendReport(report, socket);
             }
         }
 

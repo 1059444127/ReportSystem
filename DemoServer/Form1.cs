@@ -24,7 +24,7 @@ namespace DemoServer
         {
             ReportServer.Port = 11121;
             ReportServer.ReportPath = "D:\\Report";
-            ReportServer.OnReportArrive += ReportServer_OnReportArrive;
+            ReportServer.ReportReceiveEvent += ReportServer_OnReportReceive;
 
             ReportServer.Start();
             _reportServerStarted = true;
@@ -47,9 +47,9 @@ namespace DemoServer
             }
         }
 
-        private void ReportServer_OnReportArrive(ReportEventArg arg)
+        private void ReportServer_OnReportReceive(ReportReceiveEventArg arg)
         {
-            MessageBox.Show("New report comes: " + arg.CallingIP);
+            //MessageBox.Show("New report comes: " + arg.CallingIP);
         }
     }
 }
