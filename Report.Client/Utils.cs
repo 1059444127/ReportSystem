@@ -35,6 +35,16 @@ namespace Report.Client
             self.ErrorMessage = target.ErrorMessage;
         }
 
+        internal static bool HasError(this ReportInfo report)
+        {
+            return report.Status == ReportStatus.Error;
+        }
+
+        internal static bool IsServerDone(this ReportInfo report)
+        {
+            return report.Status == ReportStatus.ConfirmOK;
+        }
+
         internal static LogManager LogMgr
         {
             get { return _logMgr; }

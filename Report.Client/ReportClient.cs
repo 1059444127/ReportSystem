@@ -47,7 +47,7 @@ namespace Report.Client
         private static string _serverIP = "127.0.0.1";
         private static int _serverPort = 11121;
         private static bool _needConfirmPatientId = false;
-        private static string _pdfReportFolder = @"C:\ReportPDF";
+        private static string _pdfReportFolder = @"C:\ReportInbox";
 
         private static string _usbUID;
         private static string _doctorSignImage;
@@ -56,6 +56,8 @@ namespace Report.Client
         private static bool _stopSignal = false;
         private static bool _isRunning = false;
         private static ManualResetEvent _reportConfirmedSignal = new ManualResetEvent(false);
+
+        private static ReportInfo _reportToConfirm = null;
 
         public static event ReportSendEventHandler ReportSendEvent;
 
@@ -136,6 +138,11 @@ namespace Report.Client
             _reportConfirmedSignal.Set();
         }
 
+        public static ReportInfo GetReportNeedConfirm()
+        {
+            return _reportToConfirm;
+        }
+
         private static void ThreadFunc(object ctx)
         {
             while(true)
@@ -167,7 +174,7 @@ namespace Report.Client
                         //client.SendTimeout = 5000;//5s
                         //client.ReceiveTimeout = 5000;//5s
                         client.Connect(IPAddress.Parse(ServerIP), ServerPort);//it will throw an exception if failed to connect.
-
+                        
                         using(NetworkStream socketStream = client.GetStream())
                         {
                             Utils.Log("Send report with status: " + report.Status);
@@ -176,13 +183,14 @@ namespace Report.Client
                             report = ReportSendReceiver.ReceiveReport(socketStream);
                             Utils.Log("Receive report with status: " + report.Status);
 
-                            if (report.Status == ReportStatus.ConfirmOK || report.Status == ReportStatus.Error)
+                            if (report.IsServerDone() || report.HasError())
                             {
                                 reportDone = true;
                             }
                             else
                             {
                                 _reportConfirmedSignal.Reset();
+                                _reportToConfirm = report;
 
                                 if (ReportSendEvent != null)
                                 {
@@ -190,6 +198,7 @@ namespace Report.Client
                                 }
 
                                 _reportConfirmedSignal.WaitOne();
+                                _reportToConfirm = null;
                             }
                         }
 
@@ -200,12 +209,12 @@ namespace Report.Client
                     //4. clear work
                     if (ReportSendEvent != null)
                     {
-                        ReportSendEvent(new ReportSendEventArg() { HasError = report.Status == ReportStatus.Error, Report = report, NeedConfirm = report.NeedConfirm() });
+                        ReportSendEvent(new ReportSendEventArg() { HasError = report.HasError(), Report = report, NeedConfirm = report.NeedConfirm() });
                     }
 
                     Utils.Log("Report done with status: " + report.Status);
 
-                    if (report.Status == ReportStatus.Error)
+                    if (report.HasError())
                     {
                         //move to error report folder
                         Utils.Log("Report has error, will send to errorbox. error: " + report.ErrorMessage);
@@ -239,11 +248,13 @@ namespace Report.Client
         private static string QueryPdfFile()
         {
             DirectoryInfo di = new DirectoryInfo(PdfReportFolder);
-            var files = di.EnumerateFiles("*.pdf");
-
-            if(files.Count() > 0)
+            if (di.Exists)
             {
-                return files.First().FullName;
+                var files = di.EnumerateFiles("*.pdf");
+                if (files.Count() > 0)
+                {
+                    return files.First().FullName;
+                }
             }
 
             return string.Empty;

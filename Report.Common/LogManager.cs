@@ -7,11 +7,11 @@ using System.Threading.Tasks;
 
 namespace Report
 {
-    internal delegate void LogEventHanlder(string msg);
+    public delegate void LogEventHanlder(string msg);
 
     public class LogManager
     {
-        internal event LogEventHanlder LogEvent;
+        public event LogEventHanlder LogEvent;
 
         private string _strLogFilePath = string.Empty;
         private object _objMutext = new object();
